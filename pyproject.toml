@@ -1,0 +1,24 @@
+[project]
+name = "books"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Brendan Cazier", email = "520246+cazier@users.noreply.github.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.115.6",
+    "httpx>=0.28.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "ipython>=8.31.0",
+    "pdbr>=0.8.9",
+    "pre-commit>=4.0.1",
+]
