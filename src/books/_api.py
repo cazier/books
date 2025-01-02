@@ -1,52 +1,59 @@
-import httpx
-import pathlib
-import json
+import asyncio
 import os
+import pathlib
+import typing
+
+import httpx
+import pydantic
+
+
+class Identity(pydantic.BaseModel):
+    chip: pydantic.UUID4
+    identity: str
+    syncable: bool
+
 
 class Libby:
-    token: str
-    client: httpx.AsyncClient = None
+    client: httpx.AsyncClient
+    identity: Identity
 
-    @staticmethod
-    async def get_identity() -> dict[str, str | bool]:
-        if os.getenv("LIBBY_BEARER_TOKEN"):
-            return {'identity': os.environ['LIBBY_BEARER_TOKEN'], 'syncable': True}
-        
-        if pathlib.Path(".libby.json").exists():
-            try:
-                return json.loads(pathlib.Path(".libby.json").read_text(encoding='utf8'))
-            
-            except json.JSONDecodeError:
-                pass
+    identity_path: pathlib.Path = pathlib.Path.cwd().joinpath(".libby.json")
+
+    @classmethod
+    async def get_identity(cls) -> Identity:
+        if os.getenv("LIBBY_BEARER_TOKEN") and os.getenv("LIBBY_CHIP_UUID"):
+            return Identity.model_validate(
+                {"chip": os.environ["LIBBY_CHIP_UUID"], "identity": os.environ["LIBBY_BEARER_TOKEN"], "syncable": True}
+            )
+
+        if cls.identity_path.exists():
+            return Identity.model_validate_json(cls.identity_path.read_text(encoding="utf8"))
 
         async with httpx.AsyncClient() as client:
             resp = await client.post("https://sentry.libbyapp.com/chip")
             resp = resp.raise_for_status()
-        
-        return resp.json()
 
+        return Identity.model_validate_json(resp.text)
+
+    async def set_identity(self) -> None:
+        self.identity_path.write_text(self.identity.model_dump_json(), encoding="utf8")
 
     async def setup_sync_code(self) -> str:
         async with self.client as client:
             resp = await client.get("https://sentry.libbyapp.com/chip/clone/code")
             resp = resp.raise_for_status()
 
-            print(resp.json()['code'])
+            print(resp.json()["code"])
 
-            return resp.json()['code']
+            return typing.cast(str, resp.json()["code"])
 
+    def __init__(self) -> None:
+        async def _init_() -> None:
+            self.identity = await self.get_identity()
+            self.client = httpx.AsyncClient(headers={"Authorization": f"Bearer {self.identity.identity}"})
 
-    async def __init__(self) -> None:
-        identity = await self.get_identity()
+            if not self.identity.syncable:
+                await self.setup_sync_code()
+                # await self.set_identity()
 
-        self.token = identity['identity']
-        self.client = httpx.AsyncClient(headers={'Authorization': f'Bearer {self.token}'})
-        
-        if not identity['syncable']:
-            self.setup_sync_code()
-
-
-
-# def get(url: str) -> httpx.Response:
-#     auth = httpx.
-#     with httpx.AsyncClient(base_url="https://vandal.libbyapp.com", )
+        return asyncio.run(_init_())
