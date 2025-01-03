@@ -1,4 +1,5 @@
 import datetime
+import uuid
 
 import fastapi
 import pydantic
@@ -11,11 +12,14 @@ class Book(pydantic.BaseModel):
 
 class Tag(pydantic.BaseModel):
     name: str
-    description: str
+    description: str = ""
     created: datetime.datetime = pydantic.Field(alias="createTime")
-    uuid: pydantic.UUID4
+    uuid: pydantic.UUID4 = pydantic.Field(default_factory=uuid.uuid4)
     count: int = pydantic.Field(alias="totalTaggings")
-    books: list[Book]
+
+
+class GetTag(Tag):
+    books: list[Book] = pydantic.Field(default_factory=list)
 
 
 tags = fastapi.APIRouter(prefix="tags")

@@ -38,8 +38,8 @@ class Libby:
     async def set_identity(self) -> None:
         self.identity_path.write_text(self.identity.model_dump_json(), encoding="utf8")
 
-    async def setup_sync_code(self) -> str:
-        async with self.client as client:
+    async def setup_sync_code(self, headers: dict[str, str]) -> str:
+        async with httpx.AsyncClient(headers=headers) as client:
             resp = await client.get("https://sentry.libbyapp.com/chip/clone/code")
             resp = resp.raise_for_status()
 
@@ -50,10 +50,19 @@ class Libby:
     def __init__(self) -> None:
         async def _init_() -> None:
             self.identity = await self.get_identity()
-            self.client = httpx.AsyncClient(headers={"Authorization": f"Bearer {self.identity.identity}"})
 
+            breakpoint()
             if not self.identity.syncable:
-                await self.setup_sync_code()
-                # await self.set_identity()
+                await self.setup_sync_code(headers={"Authorization": f"Bearer {self.identity.identity}"})
+
+            await self.set_identity()
+
+            self.client = httpx.AsyncClient(
+                headers={"Authorization": f"Bearer {self.identity.identity}"}, base_url="https://vandal.libbyapp.com"
+            )
 
         return asyncio.run(_init_())
+
+    async def _request(self, method: str, endpoint: str, **kwargs: typing.Any) -> httpx.Response:
+        async with self.client as client:
+            return await client.request(method=method, url=endpoint, **kwargs)
